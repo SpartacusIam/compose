@@ -1,0 +1,378 @@
+version: "2.4"
+
+services:
+  swag:
+    image: linuxserver/swag
+    container_name: swag
+    ports:
+      - 80:80
+      - 443:443
+    volumes:
+      - /optane/appdata/swag:/config
+      - /optane/appdata/organizr/www/db:/config/log/fail2ban/organizr
+      - /optane/appdata/bitwarden/logs:/config/log/fail2ban/bitwarden
+    restart: 
+      unless-stopped
+    environment:
+      - EMAIL=xxxxxxxxxxxxxxxxx
+      - URL=xxxxxxxxxxxxxxxxx
+      - SUBDOMAINS=wildcard
+      - ONLY_SUBDOMAINS=false
+      - VALIDATION=dns
+      - DNSPLUGIN=cloudflare
+      - STAGING=false
+      - PUID=${PUID}
+      - PGID=${PUID}
+  
+  tautulli:
+    image: hotio/tautulli:release
+    container_name: tautulli
+    ports:
+      - 8181:8181
+    volumes:
+      - /optane/appdata/tautulli:/config
+      - '/optane/appdata/plex/app/Plex Media Server/Logs:/logs'
+    restart:
+      unless-stopped
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID} 
+      - UMASK=002
+      - DEBUG=no    
+      
+  organizr:
+    image: organizr/organizr
+    container_name: organizr
+    ports:
+      - 8981:80
+    volumes:
+      - /optane/appdata/organizr:/config
+    restart:
+      unless-stopped
+    environment:
+      - fpm=false
+      - PUID=${PUID}
+      - PGID=${PGID}
+      
+  plex:
+    image: hotio/plex:release
+    container_name: plex
+    network_mode: host
+    ports:
+      - 32400:32400
+    volumes:
+      - /optane/appdata/plex:/config
+      - /fast_storage/media:/media
+      - /fast_storage/4k:/4k
+      - /fast_storage/photos:/photos
+      - /cache/plexdata/Transcode/Sessions:/transcode/Transcode/Sessions
+      - '/cache/plexdata/PhotoTranscoder:/config/app/Plex Media Server/Cache/PhotoTranscoder'
+      - '/cache/plexdata/Transcode/Sync+:/config/app/Plex Media Server/Cache/Transcode/Sync+'
+      - '/cache/plexdata/Media:/config/app/Plex Media Server/Media'
+    restart: 
+      unless-stopped
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,video,utility
+      - CUDA_DRIVER_CAPABILITIES=compute,video,utility
+      - PUID=${PUID}
+      - PGID=${PUID}
+      - UMASK=002
+      - DEBUG=no
+      - PLEX_PASS=yes
+    runtime: nvidia
+
+  autoscan:
+    image: hotio/autoscan:nightly
+    container_name: autoscan
+    ports:
+      - 3030:3030
+    volumes:
+      - /optane/appdata/autoscan:/config
+      - /fast_storage/media:/media
+      - /fast_storage/4k:/4k
+    restart:
+      unless-stopped
+    environment:
+      - AUTOSCAN_VERBOSITY=0
+      - PLEX_LOGIN=xxxxxxxxxxxxxxxxx
+      - PLEX_PASSWORD=xxxxxxxxxxxxxxxxx
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - DEBUG=no
+
+  ombi:
+    image: hotio/ombi:testing
+    container_name: ombi
+    ports:
+      - 5000:5000
+    volumes:
+      - /optane/appdata/ombi:/config
+    restart:
+      unless-stopped
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID} 
+      - UMASK=002
+      - DEBUG=no              
+  
+  bitwarden:
+    image: bitwardenrs/server:latest
+    container_name: bitwarden
+    ports:
+     - 8343:80
+    volumes:
+      - /optane/appdata/bitwarden:/data
+    restart:
+      unless-stopped
+    environment:
+      - SIGNUPS_ALLOWED=false
+      - INVITATIONS_ALLOWED=false
+      - WEBSOCKET_ENABLED=true
+      - DOMAIN=xxxxxxxxxxxxxxxxx
+#      - ADMIN_TOKEN=xxxxxxxxxxxxxxxxx
+      - SMTP_HOST=smtp.gmail.com
+      - SMTP_FROM=xxxxxxxxxxxxxxxxx
+      - SMTP_PORT=xxxxxxxxxxxxxxxxx
+      - SMTP_SSL=true
+      - SMTP_USERNAME=xxxxxxxxxxxxxxxxx
+      - SMTP_PASSWORD=xxxxxxxxxxxxxxxxx
+  
+  emby:
+    image: emby/embyserver:latest
+    container_name: emby
+    network_mode: host
+    ports:
+      - 8096:8096
+    volumes:
+      - /optane/appdata/emby:/config
+      - /cache/transcode/emby:/transcode
+      - /fast_storage/media:/media
+      - /fast_storage/4k:/4k
+    restart: 
+      unless-stopped
+    environment: 
+      - UID=2
+      - GID=2     
+      - GIDLIST=2
+  
+  airsonic:
+    image: linuxserver/airsonic
+    container_name: airsonic
+    ports:
+      - 4040:4040
+    volumes:
+      - /optane/appdata/airsonic:/config
+      - /optane/appdata/airsonic/playlists:/playlists
+      - /fast_storage/media/audio/music:/music
+      - /fast_storage/media/audio/podcasts:/podcasts
+    restart: 
+      unless-stopped
+    environment: 
+      - PUID=${PUID}
+      - PGID=${PGID} 
+      - JAVA_OPTS=-Xms256m -Xmx512m      
+  
+  deluge:
+    image: binhex/arch-deluge
+    container_name: deluge
+    networks:
+      vlan140:
+        ipv4_address: 10.4.140.200  
+    ports:
+      - 8112:8112
+      - 8118:8118
+      - 24301:24301
+      - 58846:58846/tcp
+      - 58946:58946/udp
+    volumes:
+      - /optane/appdata/deluge:/config
+      - /mnt/torrent01/torrent:/data
+    restart: 
+      unless-stopped
+    environment:
+      - DELUGE_DAEMON_LOG_LEVEL=info
+      - DELUGE_WEB_LOG_LEVEL=info
+      - DEBUG=false
+      - UMASK=000
+      - PUID=${PUID}
+      - PGID=${PGID}   
+  
+  jackett:
+    image: ghcr.io/hotio/jackett:release
+    container_name: jackett
+    networks:
+      vlan140:
+        ipv4_address: 10.4.140.201
+    ports:
+      - 9117:9117
+    volumes:
+      - /optane/appdata/jackett:/config
+    restart: 
+      unless-stopped
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID} 
+      - UMASK=002
+      - DEBUG=no    
+      
+  nzbget:
+    image: ghcr.io/hotio/nzbget:release
+    container_name: nzbget
+    ports:
+      - 6789:6789
+    volumes:
+      - /optane/appdata/nzbget:/config
+      - /fast_storage:/storage
+    restart: 
+      unless-stopped
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID} 
+      - UMASK=002
+      - DEBUG=no  
+      
+  nzbhydra2:
+    image: ghcr.io/hotio/nzbhydra2:release
+    container_name: nzbhydra2
+    ports:
+      - 5076:5076
+    volumes:
+      - /optane/appdata/nzbhydra2:/config
+    restart: 
+      unless-stopped
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID} 
+      - UMASK=002
+      - DEBUG=no  
+  
+  sonarr:
+    image: ghcr.io/hotio/sonarr:nightly
+    container_name: sonarr
+    ports:
+      - 8989:8989
+    depends_on:
+      - deluge
+    volumes:
+      - /optane/appdata/sonarr:/config
+      - /fast_storage:/storage
+      - /mnt/torrent01/torrent:/torrents
+    restart: 
+      unless-stopped
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID} 
+      - UMASK=002
+      - DEBUG=no
+
+  sonarr4k:
+    image: ghcr.io/hotio/sonarr:nightly
+    container_name: sonarr4k
+    ports:
+      - 8990:8989  
+    depends_on:
+      - deluge
+    volumes:
+      - /optane/appdata/sonarr4k:/config
+      - /fast_storage:/storage
+      - /mnt/torrent01/torrent:/torrents
+    restart: 
+      unless-stopped
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID} 
+      - UMASK=002
+      - DEBUG=no
+  
+  radarr:
+    image: ghcr.io/hotio/radarr:release
+    container_name: radarr
+    depends_on:
+      - deluge
+    ports:
+      - 7878:7878
+    volumes:
+      - /optane/appdata/radarr:/config
+      - /fast_storage:/storage
+      - /mnt/torrent01/torrent:/torrents
+    restart: 
+      unless-stopped
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID} 
+      - UMASK=002
+      - DEBUG=no  
+  
+  radarr4k:
+    image: ghcr.io/hotio/radarr:release
+    container_name: radarr4k
+    ports:
+      - 7879:7878
+    depends_on:
+      - deluge  
+    volumes:
+      - /optane/appdata/radarr4k:/config
+      - /fast_storage:/storage
+      - /mnt/torrent01/torrent:/torrents
+    restart: 
+      unless-stopped
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID} 
+      - UMASK=002
+      - DEBUG=no  
+
+  bazarr4k:
+    image: ghcr.io/hotio/bazarr:release
+    container_name: bazarr4k
+    ports:
+      - 6767:6767
+    depends_on:
+      - deluge  
+    volumes:
+      - /optane/appdata/bazarr4k:/config
+      - /fast_storage:/storage
+    restart: 
+      unless-stopped
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID} 
+      - UMASK=002
+      - DEBUG=no  
+  
+  portainer:
+    image: portainer/portainer-ce
+    container_name: portainer
+    ports:
+      - 8000:8000
+      - 9000:9000
+    volumes:
+      - /optane/appdata/portainer:/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart:
+      unless-stopped
+  
+  tdarr:
+    image: haveagitgat/tdarr
+    container_name: tdarr
+    ports:
+      - 8265:8265
+    volumes:
+      - /optane/appdata/tdarr:/home/Tdarr/Documents/Tdarr
+      - /optane/appdata/tdarr/TdarrDB:/var/lib/mongodb
+      - /cache/transcode/tdarr:/cache
+      - /cache/media:/cache_media
+      - /cache/4k:/cache_4k
+    restart: 
+      unless-stopped
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+
+      
+networks:
+  vlan140:
+    external:
+      name: vlan140
