@@ -129,7 +129,7 @@ services:
       - SIGNUPS_ALLOWED=false
       - INVITATIONS_ALLOWED=false
       - WEBSOCKET_ENABLED=true
-      - DOMAIN=https://bw.iamspartacus.us
+      - DOMAIN=xxxxxxxxxxxxxxxxx
 #      - ADMIN_TOKEN=xxxxxxxxxxxxxxxxx
       - SMTP_HOST=smtp.gmail.com
       - SMTP_FROM=xxxxxxxxxxxxxxxxx
