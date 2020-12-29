@@ -1,21 +1,36 @@
 version: "2.4"
 
 services:
+  dozzle:
+    image: amir20/dozzle:latest
+    container_name: dozzle
+    restart: unless-stopped
+    networks:
+      dcp_default:
+    ports:
+      - 8888:8080
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+  
   swag:
-    image: linuxserver/swag
+    image: ghcr.io/linuxserver/swag
     container_name: swag
+    restart: unless-stopped
+    networks:
+      dcp_default:
+        ipv4_address: 172.21.0.200
+    env_file:
+      - ./.swag.env
     ports:
       - 80:80
       - 443:443
     volumes:
-      - /optane/appdata/swag:/config
-      - /optane/appdata/organizr/www/db:/config/log/fail2ban/organizr
-      - /optane/appdata/bitwarden/logs:/config/log/fail2ban/bitwarden
-    restart: 
-      unless-stopped
+      - ${APPDATA}/swag:/config
+      - ${APPDATA}/organizr/www/db:/config/log/fail2ban/organizr
+      - ${APPDATA}/bitwarden/logs:/config/log/fail2ban/bitwarden
+      - ${APPDATA}/emby/logs:/config/log/fail2ban/emby
     environment:
-      - EMAIL=xxxxxxxxxxxxxxxxx
-      - URL=xxxxxxxxxxxxxxxxx
+      - DOCKER_MODS=linuxserver/mods:swag-cloudflare-real-ip|linuxserver/mods:swag-f2bdiscord
       - SUBDOMAINS=wildcard
       - ONLY_SUBDOMAINS=false
       - VALIDATION=dns
@@ -27,13 +42,14 @@ services:
   tautulli:
     image: hotio/tautulli:release
     container_name: tautulli
+    restart: unless-stopped
+    networks: 
+      dcp_default:
     ports:
       - 8181:8181
     volumes:
-      - /optane/appdata/tautulli:/config
-      - '/optane/appdata/plex/app/Plex Media Server/Logs:/logs'
-    restart:
-      unless-stopped
+      - ${APPDATA}/tautulli:/config
+      - "${APPDATA}/plex/app/Plex Media Server/Logs:/logs"
     environment:
       - PUID=${PUID}
       - PGID=${PGID} 
@@ -43,12 +59,13 @@ services:
   organizr:
     image: organizr/organizr
     container_name: organizr
+    restart: unless-stopped
+    networks: 
+      dcp_default:
     ports:
       - 8981:80
     volumes:
-      - /optane/appdata/organizr:/config
-    restart:
-      unless-stopped
+      - ${APPDATA}/organizr:/config
     environment:
       - fpm=false
       - PUID=${PUID}
@@ -57,20 +74,18 @@ services:
   plex:
     image: hotio/plex:release
     container_name: plex
+    restart: unless-stopped
     network_mode: host
-    ports:
-      - 32400:32400
     volumes:
-      - /optane/appdata/plex:/config
+      - ${APPDATA}/plex:/config
       - /fast_storage/media:/media
       - /fast_storage/4k:/4k
-      - /fast_storage/photos:/photos
-      - /cache/plexdata/Transcode/Sessions:/transcode/Transcode/Sessions
-      - '/cache/plexdata/PhotoTranscoder:/config/app/Plex Media Server/Cache/PhotoTranscoder'
-      - '/cache/plexdata/Transcode/Sync+:/config/app/Plex Media Server/Cache/Transcode/Sync+'
-      - '/cache/plexdata/Media:/config/app/Plex Media Server/Media'
-    restart: 
-      unless-stopped
+      - /nvme_storage/media_highuse:/media_highuse
+      - /tank/photos:/photos
+      - "/tank/plexdata/Cache/Transcode:/config/app/Plex Media Server/Cache/Transcode"
+      - "/tank/plexdata/Cache/PhotoTranscoder:/config/app/Plex Media Server/Cache/PhotoTranscoder"
+      - "/tank/plexdata/Media:/config/app/Plex Media Server/Media"
+      - "/tank/plexdata/Metadata:/config/app/Plex Media Server/Metadata"
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=compute,video,utility
@@ -85,31 +100,33 @@ services:
   autoscan:
     image: hotio/autoscan:nightly
     container_name: autoscan
+    restart: unless-stopped
+    networks: 
+      dcp_default:
+    env_file:
+      - ./.autoscan.env
     ports:
       - 3030:3030
     volumes:
-      - /optane/appdata/autoscan:/config
-      - /fast_storage/media:/media
-      - /fast_storage/4k:/4k
-    restart:
-      unless-stopped
+      - ${APPDATA}/autoscan:/config
+      - /fast_storage:/storage
     environment:
       - AUTOSCAN_VERBOSITY=0
-      - PLEX_LOGIN=xxxxxxxxxxxxxxxxx
-      - PLEX_PASSWORD=xxxxxxxxxxxxxxxxx
       - PUID=${PUID}
       - PGID=${PGID}
       - DEBUG=no
+      - TZ=${TZ}
 
   ombi:
     image: hotio/ombi:testing
     container_name: ombi
+    restart: unless-stopped
+    networks: 
+      dcp_default:
     ports:
       - 5000:5000
     volumes:
-      - /optane/appdata/ombi:/config
-    restart:
-      unless-stopped
+      - ${APPDATA}/ombi:/config
     environment:
       - PUID=${PUID}
       - PGID=${PGID} 
@@ -119,38 +136,31 @@ services:
   bitwarden:
     image: bitwardenrs/server:latest
     container_name: bitwarden
+    restart: unless-stopped
+    networks: 
+      dcp_default:
+    env_file:
+      - ./.bitwarden.env
     ports:
      - 8343:80
     volumes:
-      - /optane/appdata/bitwarden:/data
-    restart:
-      unless-stopped
+      - ${APPDATA}/bitwarden:/data
     environment:
       - SIGNUPS_ALLOWED=false
       - INVITATIONS_ALLOWED=false
       - WEBSOCKET_ENABLED=true
-      - DOMAIN=xxxxxxxxxxxxxxxxx
-#      - ADMIN_TOKEN=xxxxxxxxxxxxxxxxx
-      - SMTP_HOST=smtp.gmail.com
-      - SMTP_FROM=xxxxxxxxxxxxxxxxx
-      - SMTP_PORT=xxxxxxxxxxxxxxxxx
-      - SMTP_SSL=true
-      - SMTP_USERNAME=xxxxxxxxxxxxxxxxx
-      - SMTP_PASSWORD=xxxxxxxxxxxxxxxxx
+      - LOG_FILE=/data/logs/bitwarden.log
   
   emby:
     image: emby/embyserver:latest
     container_name: emby
+    restart: unless-stopped
     network_mode: host
-    ports:
-      - 8096:8096
     volumes:
-      - /optane/appdata/emby:/config
+      - ${APPDATA}/emby:/config
       - /cache/transcode/emby:/transcode
       - /fast_storage/media:/media
       - /fast_storage/4k:/4k
-    restart: 
-      unless-stopped
     environment: 
       - UID=2
       - GID=2     
@@ -159,15 +169,16 @@ services:
   airsonic:
     image: linuxserver/airsonic
     container_name: airsonic
+    restart: unless-stopped
+    networks: 
+      dcp_default:
     ports:
       - 4040:4040
     volumes:
-      - /optane/appdata/airsonic:/config
-      - /optane/appdata/airsonic/playlists:/playlists
+      - ${APPDATA}/airsonic:/config
+      - ${APPDATA}/airsonic/playlists:/playlists
       - /fast_storage/media/audio/music:/music
       - /fast_storage/media/audio/podcasts:/podcasts
-    restart: 
-      unless-stopped
     environment: 
       - PUID=${PUID}
       - PGID=${PGID} 
@@ -176,6 +187,7 @@ services:
   deluge:
     image: binhex/arch-deluge
     container_name: deluge
+    restart: unless-stopped
     networks:
       vlan140:
         ipv4_address: 10.4.140.200  
@@ -186,10 +198,8 @@ services:
       - 58846:58846/tcp
       - 58946:58946/udp
     volumes:
-      - /optane/appdata/deluge:/config
+      - ${APPDATA}/deluge:/config
       - /mnt/torrent01/torrent:/data
-    restart: 
-      unless-stopped
     environment:
       - DELUGE_DAEMON_LOG_LEVEL=info
       - DELUGE_WEB_LOG_LEVEL=info
@@ -201,15 +211,14 @@ services:
   jackett:
     image: ghcr.io/hotio/jackett:release
     container_name: jackett
+    restart: unless-stopped
     networks:
       vlan140:
         ipv4_address: 10.4.140.201
     ports:
       - 9117:9117
     volumes:
-      - /optane/appdata/jackett:/config
-    restart: 
-      unless-stopped
+      - ${APPDATA}/jackett:/config
     environment:
       - PUID=${PUID}
       - PGID=${PGID} 
@@ -219,28 +228,46 @@ services:
   nzbget:
     image: ghcr.io/hotio/nzbget:release
     container_name: nzbget
+    restart: unless-stopped
+    networks: 
+      dcp_default:
     ports:
       - 6789:6789
     volumes:
-      - /optane/appdata/nzbget:/config
+      - ${APPDATA}/nzbget:/config
       - /fast_storage:/storage
-    restart: 
-      unless-stopped
     environment:
       - PUID=${PUID}
       - PGID=${PGID} 
       - UMASK=002
       - DEBUG=no  
+  
+#  nzbget4k:
+#    image: ghcr.io/hotio/nzbget:stable
+#    container_name: nzbget4k
+#    ports:
+#      - 6790:6789
+#    volumes:
+#      - ${APPDATA}/nzbget4k:/config
+#      - /cache/downloads:/downloads
+#    restart: 
+#      unless-stopped
+#    environment:
+#      - PUID=${PUID}
+#      - PGID=${PGID} 
+#      - UMASK=002
+#      - DEBUG=no
       
   nzbhydra2:
     image: ghcr.io/hotio/nzbhydra2:release
     container_name: nzbhydra2
+    restart: unless-stopped
+    networks: 
+      dcp_default:
     ports:
       - 5076:5076
     volumes:
-      - /optane/appdata/nzbhydra2:/config
-    restart: 
-      unless-stopped
+      - ${APPDATA}/nzbhydra2:/config
     environment:
       - PUID=${PUID}
       - PGID=${PGID} 
@@ -250,16 +277,18 @@ services:
   sonarr:
     image: ghcr.io/hotio/sonarr:nightly
     container_name: sonarr
+    restart: unless-stopped
+    networks: 
+      dcp_default:
     ports:
       - 8989:8989
     depends_on:
       - deluge
     volumes:
-      - /optane/appdata/sonarr:/config
+      - ${APPDATA}/sonarr:/config
       - /fast_storage:/storage
+      - /nvme_storage:/nvme_storage
       - /mnt/torrent01/torrent:/torrents
-    restart: 
-      unless-stopped
     environment:
       - PUID=${PUID}
       - PGID=${PGID} 
@@ -269,16 +298,17 @@ services:
   sonarr4k:
     image: ghcr.io/hotio/sonarr:nightly
     container_name: sonarr4k
+    restart: unless-stopped
+    networks: 
+      dcp_default:
     ports:
       - 8990:8989  
     depends_on:
       - deluge
     volumes:
-      - /optane/appdata/sonarr4k:/config
+      - ${APPDATA}/sonarr4k:/config
       - /fast_storage:/storage
       - /mnt/torrent01/torrent:/torrents
-    restart: 
-      unless-stopped
     environment:
       - PUID=${PUID}
       - PGID=${PGID} 
@@ -288,16 +318,17 @@ services:
   radarr:
     image: ghcr.io/hotio/radarr:release
     container_name: radarr
+    restart: unless-stopped
     depends_on:
       - deluge
+    networks: 
+      dcp_default:
     ports:
       - 7878:7878
     volumes:
-      - /optane/appdata/radarr:/config
+      - ${APPDATA}/radarr:/config
       - /fast_storage:/storage
       - /mnt/torrent01/torrent:/torrents
-    restart: 
-      unless-stopped
     environment:
       - PUID=${PUID}
       - PGID=${PGID} 
@@ -307,16 +338,17 @@ services:
   radarr4k:
     image: ghcr.io/hotio/radarr:release
     container_name: radarr4k
+    restart: unless-stopped
+    networks: 
+      dcp_default:
     ports:
       - 7879:7878
     depends_on:
       - deluge  
     volumes:
-      - /optane/appdata/radarr4k:/config
+      - ${APPDATA}/radarr4k:/config
       - /fast_storage:/storage
       - /mnt/torrent01/torrent:/torrents
-    restart: 
-      unless-stopped
     environment:
       - PUID=${PUID}
       - PGID=${PGID} 
@@ -326,15 +358,16 @@ services:
   bazarr4k:
     image: ghcr.io/hotio/bazarr:release
     container_name: bazarr4k
+    restart: unless-stopped
+    networks: 
+      dcp_default:
     ports:
       - 6767:6767
     depends_on:
       - deluge  
     volumes:
-      - /optane/appdata/bazarr4k:/config
+      - ${APPDATA}/bazarr4k:/config
       - /fast_storage:/storage
-    restart: 
-      unless-stopped
     environment:
       - PUID=${PUID}
       - PGID=${PGID} 
@@ -344,35 +377,92 @@ services:
   portainer:
     image: portainer/portainer-ce
     container_name: portainer
+    networks: 
+      dcp_default:
     ports:
       - 8000:8000
       - 9000:9000
     volumes:
-      - /optane/appdata/portainer:/data
+      - ${APPDATA}/portainer:/data
       - /var/run/docker.sock:/var/run/docker.sock
-    restart:
-      unless-stopped
+    restart: unless-stopped
   
   tdarr:
     image: haveagitgat/tdarr
     container_name: tdarr
+    restart: unless-stopped
+    networks: 
+      dcp_default:
     ports:
       - 8265:8265
     volumes:
-      - /optane/appdata/tdarr:/home/Tdarr/Documents/Tdarr
-      - /optane/appdata/tdarr/TdarrDB:/var/lib/mongodb
+      - ${APPDATA}/tdarr:/home/Tdarr/Documents/Tdarr
+      - ${APPDATA}/tdarr/TdarrDB:/var/lib/mongodb
       - /cache/transcode/tdarr:/cache
       - /cache/media:/cache_media
+      - /nvme_storage/media_highuse:/cache_media_highuse
       - /cache/4k:/cache_4k
-    restart: 
-      unless-stopped
     environment:
       - PUID=${PUID}
       - PGID=${PGID}
       - TZ=${TZ}
-
+      
+  influxdb:
+    image: influxdb:latest
+    container_name: influxdb
+    restart: unless-stopped
+    networks: 
+      dcp_default:
+    ports:
+      - 8086:8086
+      - 8083:8083
+    volumes:
+      - ${APPDATA}/influxdb:/var/lib/influxdb
+  
+  telegraf:
+    image: telegraf:latest
+    container_name: telegraf
+    restart: unless-stopped
+    network_mode: host
+    privileged: true
+    command: /bin/sh -c 'apt update && apt install -y ipmitool && apt install -y smartmontools && apt install -y nvme-cli && telegraf'
+    volumes:
+     - ${APPDATA}/telegraf/telegraf.conf:/etc/telegraf/telegraf.conf:ro
+     - /var/run/docker.sock:/var/run/docker.sock:ro
+     - /:/rootfs:ro
+     - /sys:/rootfs/sys:ro
+     - /proc:/rootfs/proc:ro
+     - /etc:/rootfs/etc:ro
+    environment:
+      - HOST_MOUNT_PREFIX=/roofs
+      - HOST_PROC=/rootfs/proc
+      - HOST_SYS=/rootfs/sys
+      - HOST_ETC=/rootfs/etc
+       
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    restart: unless-stopped
+    networks: 
+      dcp_default:
+    env_file:
+      - ./.grafana.env
+    ports:
+      - 3000:3000
+    volumes:
+      - ${APPDATA}/grafana:/var/lib/grafana
+    environment:
+      - GF_AUTH_PROXY_ENABLED=true
+      - GF_AUTH_PROXY_HEADER_NAME=X-WEBAUTH-USER
+      - GF_AUTH_PROXY_HEADER_PROPERTY=username
+      - GF_AUTH_PROXY_AUTO_SIGN_UP=true
+      - GF_AUTH_PROXY_LDAP_SYNC_TTL=60
       
 networks:
   vlan140:
     external:
       name: vlan140
+      
+  dcp_default:
+    external:
+      name: dcp_default
